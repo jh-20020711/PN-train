@@ -1,4 +1,4 @@
-# PN-Train
+# [ICLR 2025] Investigating Pattern Neurons in Urban Time Series Forecasting
 
 *This implementation of PN-Train uses Python 3.11.5 and PyTorch 2.1.1, tested on Ubuntu 18.04 with an NVIDIA A100 80GB GPU.*
 
