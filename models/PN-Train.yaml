@@ -1,0 +1,59 @@
+metro-traffic:
+  num_nodes: 1
+  seq_len: 12
+  pred_len: 12
+  time_interval: 60
+  time_of_day_size: 24
+  data_path: 'metro-traffic/traffic.npz'
+  loss_type: 'maskedmae'
+
+  train_ratio: 0.6
+  weight_decay: 1e-3
+  lradj: type1
+  train_epochs: 300
+  patience: 20
+  batch_size: 32
+  num_workers: 0
+  n_inner: 1
+  itr: 1
+  seed: 42
+  input_embedding_dim: 24
+  tod_embedding_dim: 24
+  dow_embedding_dim: 24
+  spatial_embedding_dim: 24
+  adaptive_embedding_dim: 80
+  num_layers: 3
+  dropout: 0.05
+  activation: 'gelu'
+  opt: 'adamw'
+
+
+pedestrian:
+  num_nodes: 48
+  seq_len: 12
+  pred_len: 12
+  time_interval: 60
+  time_of_day_size: 24
+  data_path: 'pedestrian/pedestrian.npz'
+  loss_type: 'maskedmae'
+
+  train_ratio: 0.6
+  weight_decay: 1e-3
+  lradj: type1
+  train_epochs: 300
+  patience: 20
+  batch_size: 32
+  num_workers: 0
+  n_inner: 1
+  itr: 1
+  seed: 0
+  input_embedding_dim: 24
+  tod_embedding_dim: 24
+  dow_embedding_dim: 24
+  spatial_embedding_dim: 0
+  adaptive_embedding_dim: 80
+  num_layers: 3
+  dropout: 0.05
+  activation: 'gelu'
+  opt: 'adamw'
+
