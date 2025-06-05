@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description='[PN-Train] Pattern Neuron guided T
 
 parser.add_argument('--data', type=str, default='metro-traffic', help='data')
 parser.add_argument('--method', type=str, default='pn')
-parser.add_argument('--mode', type=str, default='train', help='train, detect, finetune or test')
+parser.add_argument('--mode', type=str, default='train', help='train, detect, finetune or test,unfreeze_train,reverse_train')
 parser.add_argument('--finetune_sample_num', type=int, default=10)
 parser.add_argument('--detect_sample_num', type=int, default=30)
 parser.add_argument('--select_ratio', type=float, default=0.5, help='learning rate during test')
@@ -24,7 +24,10 @@ parser.add_argument('--detect_type', type=str, default='holiday', choices=['holi
 
 parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate')
 parser.add_argument('--finetune_learning_rate', type=float, default=0.002, help='pattern neuron optimizer learning rate')
+parser.add_argument('--unfreeze_learning_rate', type=float, default=0.000001, help='pattern neuron optimizer learning rate')
 parser.add_argument('--finetune_epochs', type=int, default=1, help='train epochs')
+parser.add_argument('--unfreeze_train_epochs', type=int, default=300, help='unfreeze_train epochs')
+parser.add_argument('--reverse_epochs', type=int, default=1, help='reverse_train epochs')
 
 parser.add_argument('--root_path', type=str, default='./datasets/', help='root path of the data file')
 parser.add_argument('--save_path', type=str, default='./results/', help='the path to save the output')
@@ -136,6 +139,19 @@ for ii in range(args.itr):
     elif args.mode == 'test':
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         get_test_results(setting, logger)
+
+    # 在 main 函数中添加解冻训练逻辑
+    elif args.mode == 'unfreeze_train':
+        exp.detect(setting, logger)
+
+        print('>>>>>>>unfreeze_train : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+        exp.unfreeze_train(setting, logger)
+    
+    elif args.mode == 'reverse_train':
+        exp.detect(setting, logger)
+
+        print('>>>>>>>reverse_train : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+        exp.reverse_train(setting, logger)
 
     elif args.mode == 'train':
         print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
