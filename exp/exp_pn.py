@@ -1461,28 +1461,28 @@ class Exp(Exp_Basic):
 
     def update_model_grad_unfreeze(self, model, finetune_type):
         # 更新模型梯度，根据选择的参数进行梯度更新。
-        # index_mappings = self.get_index_map()  # 获取索引映射，用于确定哪些神经元与特定模式相关
-        # for name, param in model.named_parameters():  # 遍历模型的所有参数
-        #     match = re.search(r'layers_(\w)\.(\d+)', name)  # 使用正则表达式匹配参数名中的层类型和层号
-        #     if match:
-        #         layer_type = match.group(1)  # 获取层类型（例如 't' 表示时间层，'s' 表示空间层）
-        #         layer_num = int(match.group(2))  # 获取层的编号
-        #         layer_indices = index_mappings.get(layer_type, {})  # 获取当前层类型的索引映射
-        #         param_matched = False  # 标志表示当前参数是否匹配到索引映射中的参数名
-        #         for param_name, finetune_indices in layer_indices.items():  # 遍历当前层类型的参数名和微调索引
-        #             if param_name in name:  # 如果当前参数名包含在映射的参数名中
-        #                 tune_index = finetune_indices[finetune_type][layer_num]  # 获取与微调类型和层号对应的神经元索引
-        #                 mask = torch.ones(param.size(0), dtype=torch.bool, device=param.device)  # 创建一个与参数大小相同的掩码，默认值为 True
-        #                 mask[list(tune_index)] = False  # 将与微调相关的神经元索引位置设置为 False
-        #                 param.grad[mask] = 0  # 将不需要更新的神经元梯度置零
-        #                 param_matched = True  # 标志设置为 True，表示找到了匹配的参数
-        #                 break
-                # if not param_matched:  # 如果当前参数没有匹配到任何索引映射
-                #     param.grad.zero_()  # 将参数的梯度全部置零
-                # if  param_matched:  # 如果当前参数匹配到任何索引映射
-                #     param.grad.zero_()  # 将参数的梯度全部置零
-            # else:
-            #     param.grad.zero_()  # 如果参数名不匹配层类型和层号的正则表达式，则将梯度置零
+        index_mappings = self.get_index_map()  # 获取索引映射，用于确定哪些神经元与特定模式相关
+        for name, param in model.named_parameters():  # 遍历模型的所有参数
+            match = re.search(r'layers_(\w)\.(\d+)', name)  # 使用正则表达式匹配参数名中的层类型和层号
+            if match:
+                layer_type = match.group(1)  # 获取层类型（例如 't' 表示时间层，'s' 表示空间层）
+                layer_num = int(match.group(2))  # 获取层的编号
+                layer_indices = index_mappings.get(layer_type, {})  # 获取当前层类型的索引映射
+                param_matched = False  # 标志表示当前参数是否匹配到索引映射中的参数名
+                for param_name, finetune_indices in layer_indices.items():  # 遍历当前层类型的参数名和微调索引
+                    if param_name in name:  # 如果当前参数名包含在映射的参数名中
+                        tune_index = finetune_indices[finetune_type][layer_num]  # 获取与微调类型和层号对应的神经元索引
+                        mask = torch.ones(param.size(0), dtype=torch.bool, device=param.device)  # 创建一个与参数大小相同的掩码，默认值为 True
+                        mask[list(tune_index)] = False  # 将与微调相关的神经元索引位置设置为 False
+                        param.grad[mask] = 0  # 将不需要更新的神经元梯度置零
+                        param_matched = True  # 标志设置为 True，表示找到了匹配的参数
+                        break
+                if not param_matched:  # 如果当前参数没有匹配到任何索引映射
+                    param.grad.zero_()  # 将参数的梯度全部置零
+                if  param_matched:  # 如果当前参数匹配到任何索引映射
+                    param.grad.zero_()  # 将参数的梯度全部置零
+            else:
+                param.grad.zero_()  # 如果参数名不匹配层类型和层号的正则表达式，则将梯度置零
         return model  # 返回更新梯度后的模型
         
     def update_model_grad_reverse(self, model, finetune_type):
