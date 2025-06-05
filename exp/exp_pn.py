@@ -1580,12 +1580,12 @@ class Exp(Exp_Basic):
                     # 如果启用了混合精度训练，则缩放损失并反向传播
                     amp_scaler.scale(curr_loss).backward()
                     amp_scaler.unscale_(opt)  # 反缩放梯度
-                    current_model = self.update_model_grad_unfreeze(current_model, finetune_type)  # 更新模型的梯度
+                    #current_model = self.update_model_grad_unfreeze(current_model, finetune_type)  # 更新模型的梯度
                     amp_scaler.step(opt)  # 更新优化器的参数
                     amp_scaler.update()  # 更新GradScaler对象的状态
                 else:
                     curr_loss.backward()  # 反向传播计算梯度
-                    current_model = self.update_model_grad_unfreeze(current_model, finetune_type)  # 更新模型的梯度
+                    #current_model = self.update_model_grad_unfreeze(current_model, finetune_type)  # 更新模型的梯度
                     opt.step()  # 更新优化器的参数
 
                 # if self.args.use_amp:
