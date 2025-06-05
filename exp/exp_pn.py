@@ -73,79 +73,82 @@ class Exp(Exp_Basic):
         return select_criterion(loss_type)
 
     def train(self, setting, logger):
-        self.setting = setting
-
-        path = os.path.join(self.args.checkpoints, setting)
+        # 模型的标准训练过程
+        self.setting = setting  # 保存当前的实验设置
+        path = os.path.join(self.args.checkpoints, setting)  # 创建模型保存路径
         if not os.path.exists(path):
-            os.makedirs(path)
+            os.makedirs(path)  # 如果路径不存在，则创建它
 
-        time_now = time.time()
+        time_now = time.time()  # 记录当前时间，用于计算训练耗时
 
-        train_steps = len(self.train_loader)
-        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
+        train_steps = len(self.train_loader)  # 获取训练数据加载器的步数
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)  # 初始化早停机制
 
         if self.args.use_amp:
-            amp_scaler = torch.cuda.amp.GradScaler()
+            amp_scaler = torch.cuda.amp.GradScaler()  # 如果启用了混合精度训练，则创建GradScaler对象用于缩放梯度
 
-        for epoch in range(self.args.train_epochs):
-            iter_count = 0
-            train_loss = []
+        for epoch in range(self.args.train_epochs):  # 遍历训练的每个周期
+            iter_count = 0  # 初始化迭代计数器
+            train_loss = []  # 用于存储每个批次的训练损失
 
-            self.model.train()
-            epoch_time = time.time()
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.train_loader):
-                iter_count += 1
+            self.model.train()  # 将模型设置为训练模式
+            epoch_time = time.time()  # 记录当前周期的起始时间
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(self.train_loader):  # 遍历数据加载器中的每个批次
+                iter_count += 1  # 增加迭代计数器
 
-                self.opt.zero_grad()
-                pred, true = self._process_one_batch(batch_x, batch_y, batch_x_mark, batch_y_mark)
+                self.opt.zero_grad()  # 清除之前计算的梯度
 
-                pred = self.scaler.inverse_transform(pred)
-                true = self.scaler.inverse_transform(true)
+                pred, true = self._process_one_batch(batch_x, batch_y, batch_x_mark, batch_y_mark)  # 处理一个批次的数据，获取预测值和真实值
+                pred = self.scaler.inverse_transform(pred)  # 对预测值进行逆变换，还原到原始数据的尺度
+                true = self.scaler.inverse_transform(true)  # 对真实值进行逆变换，还原到原始数据的尺度
 
-                loss = self.loss(pred, true)
-                train_loss.append(loss.item())
+                loss = self.loss(pred, true)  # 计算当前批次的损失
+                train_loss.append(loss.item())  # 将当前批次的损失添加到训练损失列表中
 
                 if (i + 1) % 100 == 0:
+                    # 每100个批次打印一次日志信息
                     log = "\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item())
                     logger.info(log)
-                    speed = (time.time() - time_now) / iter_count
-                    left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
+                    speed = (time.time() - time_now) / iter_count  # 计算训练速度
+                    left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)  # 计算剩余训练时间
                     log = '\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time)
                     logger.info(log)
-                    iter_count = 0
-                    time_now = time.time()
+                    iter_count = 0  # 重置迭代计数器
+                    time_now = time.time()  # 更新当前时间
 
                 if self.args.use_amp:
+                    # 如果启用了混合精度训练，则缩放损失并反向传播
                     amp_scaler.scale(loss).backward()
-                    amp_scaler.step(self.opt)
-                    amp_scaler.update()
+                    amp_scaler.step(self.opt)  # 更新优化器的参数
+                    amp_scaler.update()  # 更新GradScaler对象的状态
                 else:
-                    loss.backward()
-                    self.opt.step()
+                    loss.backward()  # 反向传播计算梯度
+                    self.opt.step()  # 更新优化器的参数
 
+            # 每个周期结束后打印日志信息
             log = "Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time)
             logger.info(log)
-            train_loss = np.average(train_loss)
-            vali_loss = self.vali(self.vali_loader)
+            train_loss = np.average(train_loss)  # 计算平均训练损失
+            vali_loss = self.vali(self.vali_loader)  # 在验证集上评估模型性能
 
-            test_loss = 0.
+            test_loss = 0.  # 初始化测试损失
             log = "Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss, test_loss)
             logger.info(log)
-
-            early_stopping(vali_loss, self.model, path)
+        
+            early_stopping(vali_loss, self.model, path)  # 检查是否需要早停
             if early_stopping.early_stop:
                 print("Early stopping")
                 logger.info("Early stopping")
                 break
 
-            adjust_learning_rate(self.opt, epoch + 1, self.args)
+            adjust_learning_rate(self.opt, epoch + 1, self.args)  # 调整学习率
 
-        best_model_path = path + '/' + 'checkpoint.pth'
-        self.model.load_state_dict(torch.load(best_model_path))
-        self.args.checkpoint_path = best_model_path
+        best_model_path = path + '/' + 'checkpoint.pth'  # 定义最佳模型的保存路径
+        self.model.load_state_dict(torch.load(best_model_path))  # 加载最佳模型的权重
+        self.args.checkpoint_path = best_model_path  # 更新检查点路径
 
-        return self.model
+        return self.model  # 返回训练后的模型
 
     def vali(self, vali_loader):
         self.model.eval()
@@ -158,7 +161,7 @@ class Exp(Exp_Basic):
         return total_loss
 
     def test_model(self, current_model, data_loader, log_info=None, log_name=None):
-
+        #测试模型性能，记录预测结果和真实值。
         current_model.eval()
         preds, trues = [], []
         batch_x_marks = []
@@ -1388,93 +1391,362 @@ class Exp(Exp_Basic):
                 },
             }
         return index_mappings
-
-    def update_model_grad(self, model, finetune_type='holiday'):
-        index_mappings = self.get_index_map()
-        for name, param in model.named_parameters():
-            match = re.search(r'layers_(\w)\.(\d+)', name)
-            if match:
-                layer_type = match.group(1)
-                layer_num = int(match.group(2))
-                layer_indices = index_mappings.get(layer_type, {})
-                param_matched = False
-                for param_name, finetune_indices in layer_indices.items():
-                    if param_name in name:
-                        tune_index = finetune_indices[finetune_type][layer_num]
-                        mask = torch.ones(param.size(0), dtype=torch.bool, device=param.device)
-                        mask[list(tune_index)] = False
-                        param.grad[mask] = 0
-                        param_matched = True
-                        break
-                if not param_matched:
-                    param.grad.zero_()
-            else:
-                param.grad.zero_()
-        return model
-
-    def process_finetune(self, current_model, data_loader, finetune_type):
-
-        opt = optim.AdamW(current_model.parameters(), lr=self.args.finetune_learning_rate) #self.args.learning_rate_ratio
+        
+    def reverse_finetune(self, current_model, setting, logger, data_loader, finetune_type='general'):
+        path = os.path.join(self.args.checkpoints, setting)  # 创建模型保存路径
+        if not os.path.exists(path):
+            os.makedirs(path)  # 如果路径不存在，则创建它
+            
+        # 使用常规数据集对模型进行训练
+        opt = optim.AdamW(current_model.parameters(), lr=self.args.learning_rate)  # 定义优化器
 
         if self.args.use_amp:
-            amp_scaler = torch.cuda.amp.GradScaler()
+            amp_scaler = torch.cuda.amp.GradScaler()  # 如果启用了混合精度训练，则创建GradScaler对象用于缩放梯度
 
-        for epoch in range(self.args.finetune_epochs):
+        # 初始化早停机制
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
 
-            current_model.train()
+        # 定义训练周期数
+        #num_epochs = self.args.unfreeze_train_epochs
+        num_epochs = self.args.reverse_epochs
 
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(data_loader):
+        for epoch in range(num_epochs):  # 遍历训练的每个周期
+            self.model.train()  # 将模型设置为训练模式
+            train_loss = []  # 用于存储每个批次的训练损失
 
-                opt.zero_grad()
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(data_loader):  # 遍历数据加载器中的每个批次
+                opt.zero_grad()  # 清除之前计算的梯度
 
-                pred, true = self._process_one_batch_model(current_model, batch_x, batch_y, batch_x_mark, batch_y_mark)
+                pred, true = self._process_one_batch_model(current_model, batch_x, batch_y, batch_x_mark, batch_y_mark)  # 处理一个批次的数据，获取预测值和真实值
+                pred = self.scaler.inverse_transform(pred)  # 对预测值进行逆变换，还原到原始数据的尺度
+                true = self.scaler.inverse_transform(true)  # 对真实值进行逆变换，还原到原始数据的尺度
 
-                pred = self.scaler.inverse_transform(pred)
-                true = self.scaler.inverse_transform(true)
-
-                curr_loss = self.loss(pred, true)
+                curr_loss = self.loss(pred, true)  # 计算当前批次的损失
+                train_loss.append(curr_loss.item())  # 将当前批次的损失添加到训练损失列表中
 
                 if self.args.use_amp:
+                    # 如果启用了混合精度训练，则缩放损失并反向传播
                     amp_scaler.scale(curr_loss).backward()
-                    amp_scaler.unscale_(opt)
-                    current_model = self.update_model_grad(current_model, finetune_type)
-                    amp_scaler.step(opt)
-                    amp_scaler.update()
+                    amp_scaler.unscale_(opt)  # 反缩放梯度
+                    current_model = self.update_model_grad_reverse(current_model, finetune_type)  # 更新模型的梯度
+                    amp_scaler.step(opt)  # 更新优化器的参数
+                    amp_scaler.update()  # 更新GradScaler对象的状态
                 else:
-                    curr_loss.backward()
-                    current_model = self.update_model_grad(current_model, finetune_type)
-                    opt.step()
+                    curr_loss.backward()  # 反向传播计算梯度
+                    current_model = self.update_model_grad_reverse(current_model, finetune_type)  # 更新模型的梯度
+                    opt.step()  # 更新优化器的参数
 
+            # 计算当前周期的平均训练损失
+            avg_train_loss = np.average(train_loss)
+            print(f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {avg_train_loss:.7f}")
 
-        self.test_model(current_model, self.debug_loader_ho, log_info='holiday data after finetune with type ' + finetune_type, log_name='after_finetune_holiday_'+finetune_type)
+            # 在验证集上评估模型性能
+            vali_loss = self.vali(self.vali_loader)
+            print(f"Epoch {epoch + 1}/{num_epochs}, Vali Loss: {vali_loss:.7f}")
 
-        self.test_model(current_model, self.debug_loader_ge, log_info='general after finetune with type ' + finetune_type, log_name='after_finetune_general_'+finetune_type)
+            # 检查是否需要早停
+            early_stopping(vali_loss, current_model, path)  # 检查是否需要早停
+            if early_stopping.early_stop:
+                print("Early stopping")
+                logger.info("Early stopping")
+                break
 
-        self.test_model(current_model, self.test_loader, log_info='all test after finetune with type ' + finetune_type, log_name='after_finetune_all_'+finetune_type)
+            # 调整学习率（如果有需要）
+            adjust_learning_rate(opt, epoch + 1, self.args)
 
-        return current_model
+        # 微调完成后，对模型进行测试并记录日志信息
+        self.test_model(self.model, self.debug_loader_ho, log_info='holiday data after reverse train', log_name='after_reverse_holiday')
+        self.test_model(self.model, self.debug_loader_ge, log_info='general after reverse train', log_name='after_reverse_general')
+        self.test_model(self.model, self.test_loader, log_info='all test after reverse train', log_name='after_reverse_all')
 
-    def finetune(self, setting, logger):
+    def update_model_grad_unfreeze(self, model, finetune_type):
+        # 更新模型梯度，根据选择的参数进行梯度更新。
+        # index_mappings = self.get_index_map()  # 获取索引映射，用于确定哪些神经元与特定模式相关
+        # for name, param in model.named_parameters():  # 遍历模型的所有参数
+        #     match = re.search(r'layers_(\w)\.(\d+)', name)  # 使用正则表达式匹配参数名中的层类型和层号
+        #     if match:
+        #         layer_type = match.group(1)  # 获取层类型（例如 't' 表示时间层，'s' 表示空间层）
+        #         layer_num = int(match.group(2))  # 获取层的编号
+        #         layer_indices = index_mappings.get(layer_type, {})  # 获取当前层类型的索引映射
+        #         param_matched = False  # 标志表示当前参数是否匹配到索引映射中的参数名
+        #         for param_name, finetune_indices in layer_indices.items():  # 遍历当前层类型的参数名和微调索引
+        #             if param_name in name:  # 如果当前参数名包含在映射的参数名中
+        #                 tune_index = finetune_indices[finetune_type][layer_num]  # 获取与微调类型和层号对应的神经元索引
+        #                 mask = torch.ones(param.size(0), dtype=torch.bool, device=param.device)  # 创建一个与参数大小相同的掩码，默认值为 True
+        #                 mask[list(tune_index)] = False  # 将与微调相关的神经元索引位置设置为 False
+        #                 param.grad[mask] = 0  # 将不需要更新的神经元梯度置零
+        #                 param_matched = True  # 标志设置为 True，表示找到了匹配的参数
+        #                 break
+                # if not param_matched:  # 如果当前参数没有匹配到任何索引映射
+                #     param.grad.zero_()  # 将参数的梯度全部置零
+                # if  param_matched:  # 如果当前参数匹配到任何索引映射
+                #     param.grad.zero_()  # 将参数的梯度全部置零
+            # else:
+            #     param.grad.zero_()  # 如果参数名不匹配层类型和层号的正则表达式，则将梯度置零
+        return model  # 返回更新梯度后的模型
+        
+    def update_model_grad_reverse(self, model, finetune_type):
+        # 更新模型梯度，根据选择的参数进行梯度更新。
+        index_mappings = self.get_index_map()  # 获取索引映射，用于确定哪些神经元与特定模式相关
+        for name, param in model.named_parameters():  # 遍历模型的所有参数
+            match = re.search(r'layers_(\w)\.(\d+)', name)  # 使用正则表达式匹配参数名中的层类型和层号
+            if match:
+                layer_type = match.group(1)  # 获取层类型（例如 't' 表示时间层，'s' 表示空间层）
+                layer_num = int(match.group(2))  # 获取层的编号
+                layer_indices = index_mappings.get(layer_type, {})  # 获取当前层类型的索引映射
+                param_matched = False  # 标志表示当前参数是否匹配到索引映射中的参数名
+                for param_name, finetune_indices in layer_indices.items():  # 遍历当前层类型的参数名和微调索引
+                    if param_name in name:  # 如果当前参数名包含在映射的参数名中
+                        tune_index = finetune_indices[finetune_type][layer_num]  # 获取与微调类型和层号对应的神经元索引
+                        mask = torch.ones(param.size(0), dtype=torch.bool, device=param.device)  # 创建一个与参数大小相同的掩码，默认值为 True
+                        mask[list(tune_index)] = False  # 将与微调相关的神经元索引位置设置为 False
+                        param.grad[mask] = 0  # 将不需要更新的神经元梯度置零
+                        param_matched = True  # 标志设置为 True，表示找到了匹配的参数
+                        break
+                # if not param_matched:  # 如果当前参数没有匹配到任何索引映射
+                #     param.grad.zero_()  # 将参数的梯度全部置零
+                if  param_matched:  # 如果当前参数匹配到任何索引映射
+                    param.grad.zero_()  # 将参数的梯度全部置零
+            # else:
+            #     param.grad.zero_()  # 如果参数名不匹配层类型和层号的正则表达式，则将梯度置零
+        return model  # 返回更新梯度后的模型
 
-        self.setting = setting
-        self.logger = logger
+    def unfreeze_train(self, setting, logger):
+        # 对检测到的模式神经元进行微调，以提高模型在特定模式上的性能。
+        self.setting = setting  # 保存当前的实验设置
+        self.logger = logger  # 保存日志记录器
 
+        # 创建模型保存路径
         path = os.path.join(self.args.checkpoints, setting)
-
+        # 在路径后添加 'finetune_type' 子目录
         path = path + '/' + 'finetune_type'
-
+        # 如果路径不存在，则创建它
         if not os.path.exists(path):
             os.makedirs(path)
 
+        # 加载预训练模型
         self.model.load_state_dict(torch.load(self.args.checkpoint_path, map_location=self.args.device))
 
+        # 创建节假日模型和一般模型的副本
         holiday_model = copy.deepcopy(self.model).to(self.device)
         general_model = copy.deepcopy(self.model).to(self.device)
 
+        # 如果有微调样本，则对节假日模型进行微调
         if self.args.finetune_sample_num != 0:
             self.process_finetune(holiday_model, self.retrain_loader_ho, finetune_type='holiday')
 
-        return self.model
+        # 重新初始化优化器
+        self.opt = self._select_optimizer()
+
+        # 调用 process_unfreeze 方法进行全局训练
+        self.process_unfreeze(setting,logger,self.train_loader,self.model,finetune_type='holiday')
+
+
+        return self.model  # 返回模型实例以便在调用该方法后可以继续使用或保存模型
+    
+    def process_unfreeze(self,setting,logger,data_loader,current_model,finetune_type):
+        path = os.path.join(self.args.checkpoints, setting)  # 创建模型保存路径
+        if not os.path.exists(path):
+            os.makedirs(path)  # 如果路径不存在，则创建它
+            
+        # 使用完整数据集对模型进行训练
+        opt = optim.AdamW(self.model.parameters(), lr=self.args.learning_rate)  # 定义优化器
+
+        if self.args.use_amp:
+            amp_scaler = torch.cuda.amp.GradScaler()  # 如果启用了混合精度训练，则创建GradScaler对象用于缩放梯度
+
+        # 初始化早停机制
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
+
+        # 定义训练周期数
+        num_epochs = self.args.unfreeze_train_epochs
+        #num_epochs = self.args.reverse_epochs
+
+        for epoch in range(num_epochs):  # 遍历训练的每个周期
+            self.model.train()  # 将模型设置为训练模式
+            train_loss = []  # 用于存储每个批次的训练损失
+
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(data_loader):  # 遍历数据加载器中的每个批次
+                opt.zero_grad()  # 清除之前计算的梯度
+
+                pred, true = self._process_one_batch_model(current_model, batch_x, batch_y, batch_x_mark, batch_y_mark)  # 处理一个批次的数据，获取预测值和真实值
+                pred = self.scaler.inverse_transform(pred)  # 对预测值进行逆变换，还原到原始数据的尺度
+                true = self.scaler.inverse_transform(true)  # 对真实值进行逆变换，还原到原始数据的尺度
+
+                curr_loss = self.loss(pred, true)  # 计算当前批次的损失
+                train_loss.append(curr_loss.item())  # 将当前批次的损失添加到训练损失列表中
+
+                if self.args.use_amp:
+                    # 如果启用了混合精度训练，则缩放损失并反向传播
+                    amp_scaler.scale(curr_loss).backward()
+                    amp_scaler.unscale_(opt)  # 反缩放梯度
+                    current_model = self.update_model_grad_unfreeze(current_model, finetune_type)  # 更新模型的梯度
+                    amp_scaler.step(opt)  # 更新优化器的参数
+                    amp_scaler.update()  # 更新GradScaler对象的状态
+                else:
+                    curr_loss.backward()  # 反向传播计算梯度
+                    current_model = self.update_model_grad_unfreeze(current_model, finetune_type)  # 更新模型的梯度
+                    opt.step()  # 更新优化器的参数
+
+                # if self.args.use_amp:
+                #     # 如果启用了混合精度训练，则缩放损失并反向传播
+                #     amp_scaler.scale(curr_loss).backward()
+                #     amp_scaler.unscale_(opt)  # 反缩放梯度
+                #     amp_scaler.step(opt)  # 更新优化器的参数
+                #     amp_scaler.update()  # 更新GradScaler对象的状态
+                # else:
+                #     curr_loss.backward()  # 反向传播计算梯度
+                #     self.opt.step()  # 更新优化器的参数
+
+            # 计算当前周期的平均训练损失
+            avg_train_loss = np.average(train_loss)
+            print(f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {avg_train_loss:.7f}")
+
+            # 在验证集上评估模型性能
+            vali_loss = self.vali(self.vali_loader)
+            print(f"Epoch {epoch + 1}/{num_epochs}, Vali Loss: {vali_loss:.7f}")
+
+            # 检查是否需要早停
+            early_stopping(vali_loss, self.model, path)  # 检查是否需要早停
+            if early_stopping.early_stop:
+                print("Early stopping")
+                logger.info("Early stopping")
+                break
+
+            # 调整学习率（如果有需要）
+            adjust_learning_rate(opt, epoch + 1, self.args)
+
+        # 微调完成后，对模型进行测试并记录日志信息
+        self.test_model(self.model, self.debug_loader_ho, log_info='holiday data after unfreeze train', log_name='after_unfreeze_holiday')
+        self.test_model(self.model, self.debug_loader_ge, log_info='general after unfreeze train', log_name='after_unfreeze_general')
+        self.test_model(self.model, self.test_loader, log_info='all test after unfreeze train', log_name='after_unfreeze_all')
+
+    def update_model_grad(self, model, finetune_type):
+    # 更新模型梯度，根据选择的参数进行梯度更新。
+        index_mappings = self.get_index_map()  # 获取索引映射，用于确定哪些神经元与特定模式相关
+        for name, param in model.named_parameters():  # 遍历模型的所有参数
+            match = re.search(r'layers_(\w)\.(\d+)', name)  # 使用正则表达式匹配参数名中的层类型和层号
+            if match:
+                layer_type = match.group(1)  # 获取层类型（例如 't' 表示时间层，'s' 表示空间层）
+                layer_num = int(match.group(2))  # 获取层的编号
+                layer_indices = index_mappings.get(layer_type, {})  # 获取当前层类型的索引映射
+                param_matched = False  # 标志表示当前参数是否匹配到索引映射中的参数名
+                for param_name, finetune_indices in layer_indices.items():  # 遍历当前层类型的参数名和微调索引
+                    if param_name in name:  # 如果当前参数名包含在映射的参数名中
+                        tune_index = finetune_indices[finetune_type][layer_num]  # 获取与微调类型和层号对应的神经元索引
+                        mask = torch.ones(param.size(0), dtype=torch.bool, device=param.device)  # 创建一个与参数大小相同的掩码，默认值为 True
+                        mask[list(tune_index)] = False  # 将与微调相关的神经元索引位置设置为 False
+                        param.grad[mask] = 0  # 将不需要更新的神经元梯度置零
+                        param_matched = True  # 标志设置为 True，表示找到了匹配的参数
+                        break
+                if not param_matched:  # 如果当前参数没有匹配到任何索引映射
+                    param.grad.zero_()  # 将参数的梯度全部置零
+                # if  param_matched:  # 如果当前参数匹配到任何索引映射
+                #     param.grad.zero_()  # 将参数的梯度全部置零
+            else:
+                param.grad.zero_()  # 如果参数名不匹配层类型和层号的正则表达式，则将梯度置零
+        return model  # 返回更新梯度后的模型
+
+    def process_finetune(self, current_model, data_loader, finetune_type):
+        # 对模型进行微调，使用特定数据集更新模型参数。
+        opt = optim.AdamW(current_model.parameters(), lr=self.args.finetune_learning_rate)  # 定义优化器，使用AdamW算法和指定的学习率
+
+        if self.args.use_amp:
+            amp_scaler = torch.cuda.amp.GradScaler()  # 如果启用了混合精度训练，则创建GradScaler对象用于缩放梯度
+
+        for epoch in range(self.args.finetune_epochs):  # 遍历微调的每个周期
+            current_model.train()  # 将模型设置为训练模式
+
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(data_loader):  # 遍历数据加载器中的每个批次
+                opt.zero_grad()  # 清除之前计算的梯度
+
+                pred, true = self._process_one_batch_model(current_model, batch_x, batch_y, batch_x_mark, batch_y_mark)  # 处理一个批次的数据，获取预测值和真实值
+                pred = self.scaler.inverse_transform(pred)  # 对预测值进行逆变换，还原到原始数据的尺度
+                true = self.scaler.inverse_transform(true)  # 对真实值进行逆变换，还原到原始数据的尺度
+
+                curr_loss = self.loss(pred, true)  # 计算当前批次的损失
+
+                if self.args.use_amp:
+                    # 如果启用了混合精度训练，则缩放损失并反向传播
+                    amp_scaler.scale(curr_loss).backward()
+                    amp_scaler.unscale_(opt)  # 反缩放梯度
+                    current_model = self.update_model_grad(current_model, finetune_type)  # 更新模型的梯度
+                    amp_scaler.step(opt)  # 更新优化器的参数
+                    amp_scaler.update()  # 更新GradScaler对象的状态
+                else:
+                    curr_loss.backward()  # 反向传播计算梯度
+                    current_model = self.update_model_grad(current_model, finetune_type)  # 更新模型的梯度
+                    opt.step()  # 更新优化器的参数
+
+        # 微调完成后，对模型进行测试并记录日志信息
+        self.test_model(current_model, self.debug_loader_ho, log_info='holiday data after finetune with type ' + finetune_type, log_name='after_finetune_holiday_'+finetune_type)
+        self.test_model(current_model, self.debug_loader_ge, log_info='general after finetune with type ' + finetune_type, log_name='after_finetune_general_'+finetune_type)
+        self.test_model(current_model, self.test_loader, log_info='all test after finetune with type ' + finetune_type, log_name='after_finetune_all_'+finetune_type)
+
+        return current_model  # 返回微调后的模型
+    def reverse_train(self, setting, logger):
+        # 对检测到的模式神经元进行微调，以提高模型在特定模式上的性能。
+        self.setting = setting  # 保存当前的实验设置
+        self.logger = logger  # 保存日志记录器
+
+        # 创建模型保存路径
+        path = os.path.join(self.args.checkpoints, setting)
+        # 在路径后添加 'finetune_type' 子目录
+        path = path + '/' + 'finetune_type'
+        # 如果路径不存在，则创建它
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # 加载预训练模型
+        self.model.load_state_dict(torch.load(self.args.checkpoint_path, map_location=self.args.device))
+
+        # 创建节假日模型和一般模型的副本
+        holiday_model = copy.deepcopy(self.model).to(self.device)
+        general_model = copy.deepcopy(self.model).to(self.device)
+
+        # 如果有微调样本，则对节假日模型进行微调
+        if self.args.finetune_sample_num != 0:
+            self.process_finetune(holiday_model, self.retrain_loader_ho, finetune_type='holiday')
+
+         # 打印数据加载器的样本数量
+        print("Train Loader Sample Count:", len(self.train_loader.dataset))
+        print("Retrain Loader GE Sample Count:", len(self.retrain_loader_ge.dataset))
+        print("Retrain Loader Ho Sample Count:", len(self.retrain_loader_ho.dataset))
+
+        # 重新初始化优化器
+        self.opt = self._select_optimizer()
+
+        # 调用 process_unfreeze 方法进行全局训练
+        self.reverse_finetune(self.model, setting, logger, self.train_loader, finetune_type='general')
+
+        return self.model  # 返回模型实例以便在调用该方法后可以继续使用或保存模型
+
+    def finetune(self, setting, logger):
+        # 对检测到的模式神经元进行微调，以提高模型在特定模式上的性能。
+        self.setting = setting  # 保存当前的实验设置
+        self.logger = logger  # 保存日志记录器
+
+        # 创建模型保存路径
+        path = os.path.join(self.args.checkpoints, setting)
+        # 在路径后添加 'finetune_type' 子目录
+        path = path + '/' + 'finetune_type'
+        # 如果路径不存在，则创建它
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # 加载预训练模型
+        self.model.load_state_dict(torch.load(self.args.checkpoint_path, map_location=self.args.device))
+
+        # 创建节假日模型和一般模型的副本
+        holiday_model = copy.deepcopy(self.model).to(self.device)
+        general_model = copy.deepcopy(self.model).to(self.device)
+
+        # 如果有微调样本，则对节假日模型进行微调
+        if self.args.finetune_sample_num != 0:
+            self.process_finetune(holiday_model, self.retrain_loader_ho, finetune_type='holiday')
+
+        # 返回原始模型，假设微调只针对节假日模型
+        return self.model  # 返回模型实例以便在调用该方法后可以继续使用或保存模型
 
     def verify(self, setting, logger, pattern_type='holiday'):
 
