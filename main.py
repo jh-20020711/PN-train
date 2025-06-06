@@ -24,9 +24,11 @@ parser.add_argument('--detect_type', type=str, default='holiday', choices=['holi
 
 parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate')
 parser.add_argument('--finetune_learning_rate', type=float, default=0.002, help='pattern neuron optimizer learning rate')
-parser.add_argument('--unfreeze_learning_rate', type=float, default=0.000001, help='pattern neuron optimizer learning rate')
+parser.add_argument('--unfreeze_learning_rate', type=float, default=1e-7, help='pattern neuron optimizer learning rate')
+parser.add_argument('--reverse_learning_rate', type=float, default=1e-7, help='pattern neuron optimizer learning rate')
+parser.add_argument('--test_learning_rate', type=float, default=2e-3, help='pattern neuron optimizer learning rate')
 parser.add_argument('--finetune_epochs', type=int, default=1, help='train epochs')
-parser.add_argument('--unfreeze_train_epochs', type=int, default=300, help='unfreeze_train epochs')
+parser.add_argument('--unfreeze_train_epochs', type=int, default=1, help='unfreeze_train epochs')
 parser.add_argument('--reverse_epochs', type=int, default=1, help='reverse_train epochs')
 
 parser.add_argument('--root_path', type=str, default='./datasets/', help='root path of the data file')
@@ -152,6 +154,12 @@ for ii in range(args.itr):
 
         print('>>>>>>>reverse_train : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.reverse_train(setting, logger)
+
+    elif args.mode == 'test_train':
+        exp.detect(setting, logger)
+
+        print('>>>>>>>reverse_train : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+        exp.test_train(setting, logger)
 
     elif args.mode == 'train':
         print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
