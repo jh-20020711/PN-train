@@ -428,114 +428,302 @@ class Exp(Exp_Basic):
         return model_combined
 
     def _loop_pattern(self, dataloader, current_type='holiday'):
+        preds, trues, batch_x_marks = [], [], []  # 初始化列表，用于存储预测值、真实值和批次标记
 
-        preds, trues, batch_x_marks = [], [], []
-
-        indication_time = time.time()
+        indication_time = time.time()  # 记录开始时间
 
         for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(tqdm(dataloader)):
+            # 前向传播获取激活值
+            x = batch_x.float().to(self.device)  # 将输入数据转换为浮点数并移动到指定设备（如GPU）
 
-            x = batch_x.float().to(self.device)
-
-            batch_y = batch_y.float()
+            batch_y = batch_y.float()  # 将标签数据转换为浮点数
             if self.args.use_amp:
-                with torch.cuda.amp.autocast():
+                with torch.cuda.amp.autocast():  # 使用混合精度训练
                     pred, t_activations, s_activations, t_activations_save, s_activations_save = self.model(x, batch_x_mark, detect=True)
             else:
                 pred, t_activations, s_activations, t_activations_save, s_activations_save = self.model(x, batch_x_mark, detect=True)
 
-            pred = self.scaler.inverse_transform(pred)
+            pred = self.scaler.inverse_transform(pred)  # 对预测结果进行逆变换，还原到原始数据尺度
 
-            true = batch_y[:, -self.args.pred_len:].to(self.device)
-            true = self.scaler.inverse_transform(true)
+            true = batch_y[:, -self.args.pred_len:].to(self.device)  # 获取真实值并移动到指定设备
+            true = self.scaler.inverse_transform(true)  # 对真实值进行逆变换
 
-            loss = self.loss(pred, true)
+            # 计算损失并反向传播
+            loss = self.loss(pred, true)  # 计算预测值和真实值之间的损失
 
-            self.opt.zero_grad()
-            loss.backward()
+            self.opt.zero_grad()  # 清除之前的梯度
+            loss.backward()  # 反向传播计算梯度
 
+            # 计算并存储属性分数
             self.set_important_score(t_activations, s_activations, t_activations_save, s_activations_save, current_type, index=i)
 
-            pred = pred.detach().cpu()
-            true = true.detach().cpu()
+            pred = pred.detach().cpu()  # 将预测值从GPU移动到CPU并分离
+            true = true.detach().cpu()  # 将真实值从GPU移动到CPU并分离
 
-            pred[pred < 0] = 0
-            true[true < 0] = 0
-            preds.append(pred)
-            trues.append(true)
-            batch_x_marks.append(batch_x_mark)
+            pred[pred < 0] = 0  # 将预测值中的负数设置为0
+            true[true < 0] = 0  # 将真实值中的负数设置为0
+            preds.append(pred)  # 添加预测值到列表
+            trues.append(true)  # 添加真实值到列表
+            batch_x_marks.append(batch_x_mark)  # 添加批次标记到列表
 
-        preds = torch.cat(preds, dim=0).numpy()
-        trues = torch.cat(trues, dim=0).numpy()
-        batch_x_marks = torch.cat(batch_x_marks, dim=0).numpy()
+        preds = torch.cat(preds, dim=0).numpy()  # 将预测值列表转换为numpy数组
+        trues = torch.cat(trues, dim=0).numpy()  # 将真实值列表转换为numpy数组
+        batch_x_marks = torch.cat(batch_x_marks, dim=0).numpy()  # 将批次标记列表转换为numpy数组
 
+        # 聚合多次检测结果
         if current_type == 'holiday':
-            self.k_t_index_ho = get_intersections_importance(self.k_imp_t_lst_ho, num_layers=self.model.num_layers,
-                                                             type='k_t_ho')
-            self.q_t_index_ho = get_intersections_importance(self.q_imp_t_lst_ho, num_layers=self.model.num_layers,
-                                                             type='q_t_ho')
-            self.v_t_index_ho = get_intersections_importance(self.v_imp_t_lst_ho, num_layers=self.model.num_layers,
-                                                             type='v_t_ho')
-            self.out_t_index_ho = get_intersections_importance(self.out_imp_t_lst_ho, num_layers=self.model.num_layers,
-                                                               type='o_t_ho')
-            self.up_t_index_ho = get_intersections_importance(self.up_imp_t_lst_ho, num_layers=self.model.num_layers,
-                                                              type='u_t_ho')
-            self.down_t_index_ho = get_intersections_importance(self.down_imp_t_lst_ho,
-                                                                num_layers=self.model.num_layers,
-                                                                type='d_t_ho')
+            self.k_t_index_ho = get_intersections_importance(self.k_imp_t_lst_ho, num_layers=self.model.num_layers, type='k_t_ho')
+            self.q_t_index_ho = get_intersections_importance(self.q_imp_t_lst_ho, num_layers=self.model.num_layers, type='q_t_ho')
+            self.v_t_index_ho = get_intersections_importance(self.v_imp_t_lst_ho, num_layers=self.model.num_layers, type='v_t_ho')
+            self.out_t_index_ho = get_intersections_importance(self.out_imp_t_lst_ho, num_layers=self.model.num_layers, type='o_t_ho')
+            self.up_t_index_ho = get_intersections_importance(self.up_imp_t_lst_ho, num_layers=self.model.num_layers, type='u_t_ho')
+            self.down_t_index_ho = get_intersections_importance(self.down_imp_t_lst_ho, num_layers=self.model.num_layers, type='d_t_ho')
 
-            self.k_s_index_ho = get_intersections_importance(self.k_imp_s_lst_ho, num_layers=self.model.num_layers,
-                                                             type='k_s_ho')
-            self.q_s_index_ho = get_intersections_importance(self.q_imp_s_lst_ho, num_layers=self.model.num_layers,
-                                                             type='q_s_ho')
-            self.v_s_index_ho = get_intersections_importance(self.v_imp_s_lst_ho, num_layers=self.model.num_layers,
-                                                             type='v_s_ho')
-            self.out_s_index_ho = get_intersections_importance(self.out_imp_s_lst_ho, num_layers=self.model.num_layers,
-                                                               type='o_s_ho')
-            self.up_s_index_ho = get_intersections_importance(self.up_imp_s_lst_ho, num_layers=self.model.num_layers,
-                                                              type='u_s_ho')
-            self.down_s_index_ho = get_intersections_importance(self.down_imp_s_lst_ho,
-                                                                num_layers=self.model.num_layers,
-                                                                type='d_s_ho')
+            self.k_s_index_ho = get_intersections_importance(self.k_imp_s_lst_ho, num_layers=self.model.num_layers, type='k_s_ho')
+            self.q_s_index_ho = get_intersections_importance(self.q_imp_s_lst_ho, num_layers=self.model.num_layers, type='q_s_ho')
+            self.v_s_index_ho = get_intersections_importance(self.v_imp_s_lst_ho, num_layers=self.model.num_layers, type='v_s_ho')
+            self.out_s_index_ho = get_intersections_importance(self.out_imp_s_lst_ho, num_layers=self.model.num_layers, type='o_s_ho')
+            self.up_s_index_ho = get_intersections_importance(self.up_imp_s_lst_ho, num_layers=self.model.num_layers, type='u_s_ho')
+            self.down_s_index_ho = get_intersections_importance(self.down_imp_s_lst_ho, num_layers=self.model.num_layers, type='d_s_ho')
         elif current_type == 'general':
-            self.k_t_index_ge = get_intersections_importance(self.k_imp_t_lst_ge, num_layers=self.model.num_layers,
-                                                             type='ge_k_t')
-            self.q_t_index_ge = get_intersections_importance(self.q_imp_t_lst_ge, num_layers=self.model.num_layers,
-                                                             type='ge_q_t')
-            self.v_t_index_ge = get_intersections_importance(self.v_imp_t_lst_ge, num_layers=self.model.num_layers,
-                                                             type='ge_v_t')
-            self.out_t_index_ge = get_intersections_importance(self.out_imp_t_lst_ge, num_layers=self.model.num_layers,
-                                                               type='ge_o_t')
-            self.up_t_index_ge = get_intersections_importance(self.up_imp_t_lst_ge, num_layers=self.model.num_layers,
-                                                              type='ge_u_t')
-            self.down_t_index_ge = get_intersections_importance(self.down_imp_t_lst_ge,
-                                                                num_layers=self.model.num_layers,
-                                                                type='ge_d_t')
+            self.k_t_index_ge = get_intersections_importance(self.k_imp_t_lst_ge, num_layers=self.model.num_layers, type='ge_k_t')
+            self.q_t_index_ge = get_intersections_importance(self.q_imp_t_lst_ge, num_layers=self.model.num_layers, type='ge_q_t')
+            self.v_t_index_ge = get_intersections_importance(self.v_imp_t_lst_ge, num_layers=self.model.num_layers, type='ge_v_t')
+            self.out_t_index_ge = get_intersections_importance(self.out_imp_t_lst_ge, num_layers=self.model.num_layers, type='ge_o_t')
+            self.up_t_index_ge = get_intersections_importance(self.up_imp_t_lst_ge, num_layers=self.model.num_layers, type='ge_u_t')
+            self.down_t_index_ge = get_intersections_importance(self.down_imp_t_lst_ge, num_layers=self.model.num_layers, type='ge_d_t')
 
-            self.k_s_index_ge = get_intersections_importance(self.k_imp_s_lst_ge, num_layers=self.model.num_layers,
-                                                             type='ge_k_s')
-            self.q_s_index_ge = get_intersections_importance(self.q_imp_s_lst_ge, num_layers=self.model.num_layers,
-                                                             type='ge_q_s')
-            self.v_s_index_ge = get_intersections_importance(self.v_imp_s_lst_ge, num_layers=self.model.num_layers,
-                                                             type='ge_v_s')
-            self.out_s_index_ge = get_intersections_importance(self.out_imp_s_lst_ge, num_layers=self.model.num_layers,
-                                                               type='ge_o_s')
-            self.up_s_index_ge = get_intersections_importance(self.up_imp_s_lst_ge, num_layers=self.model.num_layers,
-                                                              type='ge_u_s')
-            self.down_s_index_ge = get_intersections_importance(self.down_imp_s_lst_ge,
-                                                                num_layers=self.model.num_layers,
-                                                                type='ge_d_s')
+            self.k_s_index_ge = get_intersections_importance(self.k_imp_s_lst_ge, num_layers=self.model.num_layers, type='ge_k_s')
+            self.q_s_index_ge = get_intersections_importance(self.q_imp_s_lst_ge, num_layers=self.model.num_layers, type='ge_q_s')
+            self.v_s_index_ge = get_intersections_importance(self.v_imp_s_lst_ge, num_layers=self.model.num_layers, type='ge_v_s')
+            self.out_s_index_ge = get_intersections_importance(self.out_imp_s_lst_ge, num_layers=self.model.num_layers, type='ge_o_s')
+            self.up_s_index_ge = get_intersections_importance(self.up_imp_s_lst_ge, num_layers=self.model.num_layers, type='ge_u_s')
+            self.down_s_index_ge = get_intersections_importance(self.down_imp_s_lst_ge, num_layers=self.model.num_layers, type='ge_d_s')
 
         return preds, trues, batch_x_marks
+    
+    def detect_CV(self, setting, logger):
+        # 加载模型权重
+        best_model_path = self.args.checkpoint_path  # 获取模型检查点路径
+        self.model.load_state_dict(torch.load(best_model_path, map_location=self.args.device))  # 加载预训练模型权重
+        self.setting = setting  # 设置当前实验配置
+        self.logger = logger  # 设置日志记录器
+        self.model.eval()  # 将模型设置为评估模式
+        
+        # 初始化数据结构，用于存储两种模式(holiday/general)的激活值
+        # 结构: {模式: {层类型: {组件: {层号: [神经元激活值列表]}}}}
+        self.activation_values = {
+            'holiday': {'t': {}, 's': {}},  # holiday模式的时间层和空间层激活值
+            'general': {'t': {}, 's': {}}   # general模式的时间层和空间层激活值
+        }
+        
+        # 处理holiday模式数据
+        self._loop_pattern_CV(self.indication_loader_ho, 'holiday')  # 收集holiday模式下的激活值
+        # 处理general模式数据
+        self._loop_pattern_CV(self.indication_loader_ge, 'general')  # 收集general模式下的激活值
+        
+        # 计算并筛选模式神经元
+        self._calculate_pattern_neurons()  # 根据激活值计算并筛选出模式神经元
+
+    def _loop_pattern_CV(self, dataloader, current_type):
+        """遍历数据集，收集神经元激活值"""
+        # 初始化当前模式的激活值存储结构
+        activation_values = {
+            't': {  # 时间层
+                'q': [{} for _ in range(self.model.num_layers)],  # 查询组件，每层一个空字典
+                'k': [{} for _ in range(self.model.num_layers)],  # 键组件，每层一个空字典
+                'v': [{} for _ in range(self.model.num_layers)],  # 值组件，每层一个空字典
+                'out': [{} for _ in range(self.model.num_layers)],  # 输出组件，每层一个空字典
+                'up': [{} for _ in range(self.model.num_layers)],  # 上采样组件，每层一个空字典
+                'down': [{} for _ in range(self.model.num_layers)]  # 下采样组件，每层一个空字典
+            },
+            's': {  # 空间层
+                'q': [{} for _ in range(self.model.num_layers)],
+                'k': [{} for _ in range(self.model.num_layers)],
+                'v': [{} for _ in range(self.model.num_layers)],
+                'out': [{} for _ in range(self.model.num_layers)],
+                'up': [{} for _ in range(self.model.num_layers)],
+                'down': [{} for _ in range(self.model.num_layers)]
+            }
+        }
+
+        # 遍历数据加载器
+        for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(tqdm(dataloader)):
+            x = batch_x.float().to(self.device)  # 将输入数据转换为浮点数并移动到指定设备
+            
+            # 前向传播并获取激活值
+            with torch.no_grad():  # 禁用梯度计算，减少内存消耗
+                if self.args.use_amp:
+                    with torch.cuda.amp.autocast():  # 使用混合精度训练
+                        _, _, _, t_activations_save, s_activations_save = self.model(x, batch_x_mark, detect=True)
+                else:
+                    _, _, _, t_activations_save, s_activations_save = self.model(x, batch_x_mark, detect=True)
+            
+            # 处理时间层激活值
+            self._process_activations(t_activations_save, activation_values['t'], i)  # 处理时间层激活值并存储
+            # 处理空间层激活值
+            self._process_activations(s_activations_save, activation_values['s'], i)  # 处理空间层激活值并存储
+        
+        # 保存当前模式的结果
+        self.activation_values[current_type] = activation_values  # 将当前模式的激活值存储到类变量中
+
+    def _process_activations(self, activations, storage, sample_idx):
+        """
+        处理激活值并存储
+        activations: 包含(q, k, v, out, up, down)激活值的元组
+        storage: 存储结构
+        sample_idx: 当前样本索引
+        """
+        components = ['q', 'k', 'v', 'out', 'up', 'down']  # 定义组件名称列表
+        
+        # 遍历所有层
+        for layer in range(self.model.num_layers):
+            # 遍历所有组件(q, k, v等)
+            for comp_idx, comp in enumerate(components):
+                act = activations[comp_idx][layer]  # 获取当前组件和层的激活值
+                if act is None:
+                    continue  # 如果激活值为空，跳过当前迭代
+                
+                # 计算每个神经元的激活值(对空间和时间维度求和)
+                # 形状: [batch_size, seq_len, num_nodes] -> [batch_size]
+                neuron_activations = act.sum(dim=[1, 2]).abs()  # 对指定维度求和并取绝对值
+                
+                # 遍历批次中的每个样本
+                for batch_idx in range(neuron_activations.size(0)):
+                    # 遍历每个神经元
+                    for neuron_idx in range(neuron_activations.size(1)):
+                        activation_value = neuron_activations[batch_idx, neuron_idx].item()  # 获取单个激活值
+                        
+                        # 初始化神经元存储
+                        if neuron_idx not in storage[comp][layer]:
+                            storage[comp][layer][neuron_idx] = []  # 如果神经元索引不存在，初始化为空列表
+                        
+                        # 保存激活值
+                        storage[comp][layer][neuron_idx].append(activation_value)  # 将激活值添加到对应神经元的列表中
+
+    def _calculate_pattern_neurons(self):
+        """计算并筛选模式神经元"""
+        # 初始化结果存储
+        self.pattern_neurons = {
+            'holiday': {'t': {}, 's': {}},  # holiday模式的时间层和空间层模式神经元
+            'general': {'t': {}, 's': {}}   # general模式的时间层和空间层模式神经元
+        }
+        
+        # 处理每种模式
+        for pattern_type in ['holiday', 'general']:
+            for layer_type in ['t', 's']:
+                for component in ['q', 'k', 'v', 'out', 'up', 'down']:
+                    # 初始化当前组件的结果
+                    self.pattern_neurons[pattern_type][layer_type][component] = {}
+                    
+                    # 遍历所有层
+                    for layer in range(self.model.num_layers):
+                        neuron_data = self.activation_values[pattern_type][layer_type][component][layer]
+                        if not neuron_data:
+                            continue  # 如果没有神经元数据，跳过当前层
+                        
+                        # 计算层内所有神经元的平均激活值
+                        all_activations = []
+                        for activations in neuron_data.values():
+                            all_activations.extend(activations)  # 收集所有激活值
+                        layer_mean = np.mean(all_activations) if all_activations else 0  # 计算层均值
+                        
+                        # 筛选神经元
+                        selected_neurons = []
+                        for neuron_idx, activations in neuron_data.items():
+                            if len(activations) < 2:  # 需要至少2个值计算标准差
+                                continue
+                            
+                            # 计算均值和标准差
+                            mean_act = np.mean(activations)  # 神经元激活值均值
+                            std_act = np.std(activations)    # 神经元激活值标准差
+                            
+                            # 计算变异系数(CV)
+                            cv = std_act / (mean_act + 1e-8)  # 避免除以零
+                            
+                            # 筛选条件: CV<3 且 激活值 > 0.3 * 层均值
+                            if cv < 3 and mean_act > 0.3 * layer_mean:
+                                selected_neurons.append(neuron_idx)  # 将符合条件的神经元索引添加到列表中
+                        
+                        # 保存结果
+                        self.pattern_neurons[pattern_type][layer_type][component][layer] = set(selected_neurons)
+        
+        # 将结果转换为原代码中的结构
+        self._convert_to_legacy_structure()
+
+    def _convert_to_legacy_structure(self):
+        """将新结构转换为原代码中的结构"""
+        # 初始化原代码结构
+        self.k_t_index_ho = {}
+        self.q_t_index_ho = {}
+        self.v_t_index_ho = {}
+        self.out_t_index_ho = {}
+        self.up_t_index_ho = {}
+        self.down_t_index_ho = {}
+        
+        self.k_s_index_ho = {}
+        self.q_s_index_ho = {}
+        self.v_s_index_ho = {}
+        self.out_s_index_ho = {}
+        self.up_s_index_ho = {}
+        self.down_s_index_ho = {}
+        
+        self.k_t_index_ge = {}
+        self.q_t_index_ge = {}
+        self.v_t_index_ge = {}
+        self.out_t_index_ge = {}
+        self.up_t_index_ge = {}
+        self.down_t_index_ge = {}
+        
+        self.k_s_index_ge = {}
+        self.q_s_index_ge = {}
+        self.v_s_index_ge = {}
+        self.out_s_index_ge = {}
+        self.up_s_index_ge = {}
+        self.down_s_index_ge = {}
+        
+        # 填充holiday模式的时间层
+        for layer in range(self.model.num_layers):
+            self.k_t_index_ho[layer] = self.pattern_neurons['holiday']['t'].get('k', {}).get(layer, set())
+            self.q_t_index_ho[layer] = self.pattern_neurons['holiday']['t'].get('q', {}).get(layer, set())
+            self.v_t_index_ho[layer] = self.pattern_neurons['holiday']['t'].get('v', {}).get(layer, set())
+            self.out_t_index_ho[layer] = self.pattern_neurons['holiday']['t'].get('out', {}).get(layer, set())
+            self.up_t_index_ho[layer] = self.pattern_neurons['holiday']['t'].get('up', {}).get(layer, set())
+            self.down_t_index_ho[layer] = self.pattern_neurons['holiday']['t'].get('down', {}).get(layer, set())
+            
+            self.k_s_index_ho[layer] = self.pattern_neurons['holiday']['s'].get('k', {}).get(layer, set())
+            self.q_s_index_ho[layer] = self.pattern_neurons['holiday']['s'].get('q', {}).get(layer, set())
+            self.v_s_index_ho[layer] = self.pattern_neurons['holiday']['s'].get('v', {}).get(layer, set())
+            self.out_s_index_ho[layer] = self.pattern_neurons['holiday']['s'].get('out', {}).get(layer, set())
+            self.up_s_index_ho[layer] = self.pattern_neurons['holiday']['s'].get('up', {}).get(layer, set())
+            self.down_s_index_ho[layer] = self.pattern_neurons['holiday']['s'].get('down', {}).get(layer, set())
+        
+        # 填充general模式的时间层
+        for layer in range(self.model.num_layers):
+            self.k_t_index_ge[layer] = self.pattern_neurons['general']['t'].get('k', {}).get(layer, set())
+            self.q_t_index_ge[layer] = self.pattern_neurons['general']['t'].get('q', {}).get(layer, set())
+            self.v_t_index_ge[layer] = self.pattern_neurons['general']['t'].get('v', {}).get(layer, set())
+            self.out_t_index_ge[layer] = self.pattern_neurons['general']['t'].get('out', {}).get(layer, set())
+            self.up_t_index_ge[layer] = self.pattern_neurons['general']['t'].get('up', {}).get(layer, set())
+            self.down_t_index_ge[layer] = self.pattern_neurons['general']['t'].get('down', {}).get(layer, set())
+            
+            self.k_s_index_ge[layer] = self.pattern_neurons['general']['s'].get('k', {}).get(layer, set())
+            self.q_s_index_ge[layer] = self.pattern_neurons['general']['s'].get('q', {}).get(layer, set())
+            self.v_s_index_ge[layer] = self.pattern_neurons['general']['s'].get('v', {}).get(layer, set())
+            self.out_s_index_ge[layer] = self.pattern_neurons['general']['s'].get('out', {}).get(layer, set())
+            self.up_s_index_ge[layer] = self.pattern_neurons['general']['s'].get('up', {}).get(layer, set())
+            self.down_s_index_ge[layer] = self.pattern_neurons['general']['s'].get('down', {}).get(layer, set())
 
     def detect(self, setting, logger):
 
+        # 加载预训练模型
         best_model_path = self.args.checkpoint_path
         self.model.load_state_dict(torch.load(best_model_path, map_location=self.args.device))
         self.setting = setting
         self.logger = logger
         self.model.eval()
 
+        # 初始化存储列表
         self.q_imp_t_lst_ho, self.k_imp_t_lst_ho, self.v_imp_t_lst_ho, self.out_imp_t_lst_ho = [], [], [], []
         self.up_imp_t_lst_ho, self.down_imp_t_lst_ho = [], []
 
@@ -548,10 +736,11 @@ class Exp(Exp_Basic):
         self.q_imp_s_lst_ge, self.k_imp_s_lst_ge, self.v_imp_s_lst_ge, self.out_imp_s_lst_ge = [], [], [], []
         self.up_imp_s_lst_ge, self.down_imp_s_lst_ge = [], []
 
+        # 对节假日数据计算属性分数
         self._loop_pattern(self.indication_loader_ho, current_type='holiday')
-
+        # 对常规数据计算属性分数
         self._loop_pattern(self.indication_loader_ge, current_type='general')
-
+        # 存储最终检测结果
         self.k_t_index_ho_new, self.k_t_index_ge_new = self.k_t_index_ho, self.k_t_index_ge
         self.q_t_index_ho_new, self.q_t_index_ge_new = self.q_t_index_ho, self.q_t_index_ge
         self.v_t_index_ho_new, self.v_t_index_ge_new = self.v_t_index_ho, self.v_t_index_ge
@@ -568,28 +757,31 @@ class Exp(Exp_Basic):
 
     def _get_important_score(self, q, k, v, out, up, down, layer, name, param, q_imp, k_imp, v_imp, out_imp, up_imp,
                              down_imp):
+        # 定义注意力层和FFN层的神经元选择数量
+        attn_neurons_len = int(self.model.model_dim * self.args.select_ratio)# 注意力层神经元数量
+        up_len = int(self.model.feed_forward_dim * self.args.select_ratio)# FFN上采样层神经元数量
+        down_len = attn_neurons_len # FFN下采样层神经元数量
 
-        attn_neurons_len = int(self.model.model_dim * self.args.select_ratio)
-        up_len = int(self.model.feed_forward_dim * self.args.select_ratio)
-        down_len = attn_neurons_len
-
+        # 计算查询权重(Q)的神经元属性分数
         if 'attn.FC_Q.weight' in name:
-            if self.args.detect_func == 'f':
-                importance = q[layer].detach().abs()
-            elif self.args.detect_func == 'r':
-                importance = q[layer].detach()
-            elif self.args.detect_func == 'g':
-                importance = param.grad.abs().sum(dim=1)
-            elif self.args.detect_func == 'o':
-                importance = (q[layer].detach().abs() * param.grad.abs().sum(dim=1))
-            elif self.args.detect_func == 'n':
-                feature_importance = torch.softmax(q[layer].detach(), dim=0)
-                grad_importance = torch.softmax(param.grad.abs().sum(dim=1), dim=0)
-                importance = feature_importance * grad_importance
-            elif self.args.detect_func == 'a':
-                importance = (q[layer].detach().abs() + param.grad.abs().sum(dim=1))
+            # 根据检测方法选择计算方式
+            if self.args.detect_func == 'f':# 特征激活绝对值
+                importance = q[layer].detach().abs()# 使用激活值的绝对值作为重要性分数
+            elif self.args.detect_func == 'r':# 原始特征激活值
+                importance = q[layer].detach()# 使用原始激活值作为重要性分数
+            elif self.args.detect_func == 'g':# 梯度绝对值之和
+                importance = param.grad.abs().sum(dim=1)# 使用梯度的绝对值之和作为重要性分数
+            elif self.args.detect_func == 'o':# 特征激活×梯度
+                importance = (q[layer].detach().abs() * param.grad.abs().sum(dim=1))# 激活值与梯度的乘积
+            elif self.args.detect_func == 'n':# softmax归一化乘积
+                feature_importance = torch.softmax(q[layer].detach(), dim=0) # 对激活值进行softmax归一化
+                grad_importance = torch.softmax(param.grad.abs().sum(dim=1), dim=0)# 对梯度进行softmax归一化
+                importance = feature_importance * grad_importance # 归一化后的乘积
+            elif self.args.detect_func == 'a':# 特征激活+梯度
+                importance = (q[layer].detach().abs() + param.grad.abs().sum(dim=1))# 激活值与梯度的和
+             # 选择重要性最高的神经元
             top_neurons = importance.argsort(descending=True)[:attn_neurons_len]
-            q_imp[layer] = top_neurons
+            q_imp[layer] = top_neurons# 存储结果
         elif 'attn.FC_K.weight' in name:
             if self.args.detect_func == 'f':
                 importance = k[layer].detach().abs()
@@ -682,8 +874,9 @@ class Exp(Exp_Basic):
 
     def set_important_score(self, t_param, s_param, t_param_save, s_param_save, current_type, index=None):
 
+        # 解包时间和空间层的激活值
         (t_q, t_k, t_v, t_out, t_up, t_down), (s_q, s_k, s_v, s_out, s_up, s_down) = t_param, s_param
-
+        # 初始化存储重要性分数的张量
         (t_q_save, t_k_save, t_v_save, t_out_save, t_up_save, t_down_save), (s_q_save, s_k_save, s_v_save, s_out_save, s_up_save, s_down_save) = t_param_save, s_param_save
 
         save_dict = {'t_q': t_q_save,
@@ -730,39 +923,22 @@ class Exp(Exp_Basic):
         up_imp_s, down_imp_s = torch.zeros((self.model.num_layers, up_len), dtype=torch.int), torch.zeros(
             (self.model.num_layers, down_len), dtype=torch.int)
 
+        # 遍历所有模型参数
         for name, param in self.model.named_parameters():
             match = re.search(r'layers_(\w)\.(\d+)', name)
             if match:
                 type = match.group(1)
                 layer = int(match.group(2))
+                # 时间层参数处理
                 if type == 't':
-                    q_imp_t, k_imp_t, v_imp_t, out_imp_t, up_imp_t, down_imp_t = self._get_important_score(t_q, t_k,
-                                                                                                           t_v, t_out,
-                                                                                                           t_up, t_down,
-                                                                                                           layer, name,
-                                                                                                           param,
-                                                                                                           q_imp_t,
-                                                                                                           k_imp_t,
-                                                                                                           v_imp_t,
-                                                                                                           out_imp_t,
-                                                                                                           up_imp_t,
-                                                                                                           down_imp_t)
+                    q_imp_t, k_imp_t, v_imp_t, out_imp_t, up_imp_t, down_imp_t = self._get_important_score(t_q, t_k,t_v, t_out,t_up, t_down,layer, name,param,q_imp_t,k_imp_t,v_imp_t,out_imp_t,up_imp_t,down_imp_t)
+                # 空间层参数处理
                 elif type == 's':
-                    q_imp_s, k_imp_s, v_imp_s, out_imp_s, up_imp_s, down_imp_s = self._get_important_score(s_q, s_k,
-                                                                                                           s_v, s_out,
-                                                                                                           s_up, s_down,
-                                                                                                           layer, name,
-                                                                                                           param,
-                                                                                                           q_imp_s,
-                                                                                                           k_imp_s,
-                                                                                                           v_imp_s,
-                                                                                                           out_imp_s,
-                                                                                                           up_imp_s,
-                                                                                                           down_imp_s)
-
+                    q_imp_s, k_imp_s, v_imp_s, out_imp_s, up_imp_s, down_imp_s = self._get_important_score(s_q, s_k,s_v, s_out,s_up, s_down,layer, name,param,q_imp_s,k_imp_s,v_imp_s,out_imp_s,up_imp_s,down_imp_s)
+        # 按数据类型存储结果
         if current_type == 'holiday':
-            self.q_imp_t_lst_ho.append(q_imp_t)
-            self.k_imp_t_lst_ho.append(k_imp_t)
+            self.q_imp_t_lst_ho.append(q_imp_t) # 存储节假日Q权重重要性
+            self.k_imp_t_lst_ho.append(k_imp_t) # 存储节假日K权重重要性
             self.v_imp_t_lst_ho.append(v_imp_t)
             self.out_imp_t_lst_ho.append(out_imp_t)
             self.up_imp_t_lst_ho.append(up_imp_t)
@@ -775,6 +951,7 @@ class Exp(Exp_Basic):
             self.up_imp_s_lst_ho.append(up_imp_s)
             self.down_imp_s_lst_ho.append(down_imp_s)
         elif current_type == 'general':
+            # 存储常规数据的重要性分数(结构同上)
             self.q_imp_t_lst_ge.append(q_imp_t)
             self.k_imp_t_lst_ge.append(k_imp_t)
             self.v_imp_t_lst_ge.append(v_imp_t)
@@ -1461,7 +1638,7 @@ class Exp(Exp_Basic):
         self.test_model(current_model, self.debug_loader_ho, log_info='holiday data after reverse train', log_name='after_reverse_holiday')
         self.test_model(current_model, self.debug_loader_ge, log_info='general after reverse train', log_name='after_reverse_general')
         self.test_model(current_model, self.test_loader, log_info='all test after reverse train', log_name='after_reverse_all')
-        
+
     def update_model_grad_reverse(self, model, finetune_type):
         # 更新模型梯度，根据选择的参数进行梯度更新。
         index_mappings = self.get_index_map()  # 获取索引映射，用于确定哪些神经元与特定模式相关
@@ -1577,7 +1754,7 @@ class Exp(Exp_Basic):
                 break
 
             # 调整学习率（如果有需要）
-            adjust_learning_rate(opt, epoch + 1, self.args)
+            #adjust_learning_rate(opt, epoch + 1, self.args)
 
         # 微调完成后，对模型进行测试并记录日志信息
         self.test_model(current_model, self.debug_loader_ho, log_info='holiday data after unfreeze train', log_name='after_reverse_holiday')
