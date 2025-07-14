@@ -17,6 +17,7 @@ parser.add_argument('--mode', type=str, default='train', help='train, detect, fi
 parser.add_argument('--finetune_sample_num', type=int, default=10)
 parser.add_argument('--detect_sample_num', type=int, default=30)
 parser.add_argument('--select_ratio', type=float, default=0.5, help='learning rate during test')
+parser.add_argument('--select_ratio_CV', type=float, default=1, help='learning rate during test')
 
 parser.add_argument('--deactivate_type', type=str, default='none', choices=['random', 'none', 'pn-train'])
 parser.add_argument('--detect_func', type=str, default='r', choices=['o', 'a', 'f', 'g', 'n', 'r'])
@@ -142,7 +143,14 @@ for ii in range(args.itr):
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         get_test_results(setting, logger)
 
-    # 在 main 函数中添加解冻训练逻辑
+    elif args.mode == 'finetune_CV':
+
+        exp.detect_CV(setting, logger)
+
+        print('>>>>>>>finetune_CV : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+        exp.finetune(setting, logger)
+
+
     elif args.mode == 'unfreeze_train':
         exp.detect(setting, logger)
 
