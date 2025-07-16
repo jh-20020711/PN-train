@@ -19,6 +19,9 @@ parser.add_argument('--detect_sample_num', type=int, default=30)
 parser.add_argument('--select_ratio', type=float, default=0.5, help='learning rate during test')
 parser.add_argument('--select_ratio_CV', type=float, default=1, help='learning rate during test')
 
+parser.add_argument('--cv_thresh', type=float, default=3, help='cv_thresh rate during test')
+parser.add_argument('--mean_ratio', type=float, default=0.3, help='mean_ratio during test')
+
 parser.add_argument('--deactivate_type', type=str, default='none', choices=['random', 'none', 'pn-train'])
 parser.add_argument('--detect_func', type=str, default='r', choices=['o', 'a', 'f', 'g', 'n', 'r'])
 parser.add_argument('--detect_type', type=str, default='holiday', choices=['holiday', 'general'])
