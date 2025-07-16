@@ -667,13 +667,15 @@ class Exp(Exp_Basic):
 
         return preds, trues, batch_x_marks
 
-    def filter_neurons(self,mean_arr, cv_arr, mean_all,cv_thresh=3.0, mean_ratio=0.3):
+    def filter_neurons(self,mean_arr, cv_arr, mean_all):
         """
         mean_arr   : [num_neurons]  该层神经元均值
         cv_arr     : [num_neurons]  该层神经元变异系数
         mean_all   : float          全局均值
         return     : list[int]      合格神经元索引
         """
+        cv_thresh=self.args.cv_thresh
+        mean_ratio=self.args.mean_ratio
         mask = (cv_arr < cv_thresh) & (mean_arr > mean_ratio * mean_all)
         return np.where(mask)[0].tolist()
 
