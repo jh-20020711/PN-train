@@ -501,6 +501,49 @@ class Exp(Exp_Basic):
             self.up_s_index_ge = get_intersections_importance(self.up_imp_s_lst_ge, num_layers=self.model.num_layers, type='ge_u_s')
             self.down_s_index_ge = get_intersections_importance(self.down_imp_s_lst_ge, num_layers=self.model.num_layers, type='ge_d_s')
 
+        # 计算并打印比例
+        total_neurons = 6816  # 已知总神经元数
+
+        # 筛选后的神经元数（holiday）
+        if current_type == 'holiday':
+            selected_neurons_holiday = 0
+            for layer in range(self.model.num_layers):
+                selected_neurons_holiday += len(self.q_t_index_ho[layer])
+                selected_neurons_holiday += len(self.k_t_index_ho[layer])
+                selected_neurons_holiday += len(self.v_t_index_ho[layer])
+                selected_neurons_holiday += len(self.out_t_index_ho[layer])
+                selected_neurons_holiday += len(self.up_t_index_ho[layer])
+                selected_neurons_holiday += len(self.down_t_index_ho[layer])
+                selected_neurons_holiday += len(self.q_s_index_ho[layer])
+                selected_neurons_holiday += len(self.k_s_index_ho[layer])
+                selected_neurons_holiday += len(self.v_s_index_ho[layer])
+                selected_neurons_holiday += len(self.out_s_index_ho[layer])
+                selected_neurons_holiday += len(self.up_s_index_ho[layer])
+                selected_neurons_holiday += len(self.down_s_index_ho[layer])
+            proportion = selected_neurons_holiday / total_neurons
+            print(f"筛选出来的神经元比例 (holiday): {proportion * 100:.2f}% ({selected_neurons_holiday}/{total_neurons})")
+
+        # 筛选后的神经元数（general）
+        elif current_type == 'general':
+            selected_neurons_general = 0
+            for layer in range(self.model.num_layers):
+                selected_neurons_general += len(self.q_t_index_ge[layer])
+                selected_neurons_general += len(self.k_t_index_ge[layer])
+                selected_neurons_general += len(self.v_t_index_ge[layer])
+                selected_neurons_general += len(self.out_t_index_ge[layer])
+                selected_neurons_general += len(self.up_t_index_ge[layer])
+                selected_neurons_general += len(self.down_t_index_ge[layer])
+                selected_neurons_general += len(self.q_s_index_ge[layer])
+                selected_neurons_general += len(self.k_s_index_ge[layer])
+                selected_neurons_general += len(self.v_s_index_ge[layer])
+                selected_neurons_general += len(self.out_s_index_ge[layer])
+                selected_neurons_general += len(self.up_s_index_ge[layer])
+                selected_neurons_general += len(self.down_s_index_ge[layer])
+            proportion = selected_neurons_general / total_neurons
+            print(f"筛选出来的神经元比例 (general): {proportion * 100:.2f}% ({selected_neurons_general}/{total_neurons})")
+
+       
+            
         return preds, trues, batch_x_marks
     
     def _loop_pattern_CV(self, dataloader, current_type='holiday'):
@@ -665,6 +708,110 @@ class Exp(Exp_Basic):
             self.up_s_index_ge = [self.filter_neurons(self.up_s_mean_ge[l], self.up_s_cv_ge[l], self.mean_all_up_s_ge)for l in range(num_layers)]
             self.down_s_index_ge = [self.filter_neurons(self.down_s_mean_ge[l], self.down_t_cv_ge[l], self.mean_all_down_s_ge)for l in range(num_layers)]
 
+        # 计算神经元数量比例
+        total_neurons_t = 0
+        selected_neurons_t = 0
+
+        total_neurons_s = 0
+        selected_neurons_s = 0
+
+        if current_type == 'holiday':
+            for layer in range(num_layers):
+                # 时间层
+                total_neurons_t += len(self.q_t_mean_ho[layer]) if self.q_t_mean_ho[layer] is not None else 0
+                selected_neurons_t += len(self.q_t_index_ho[layer]) if self.q_t_index_ho[layer] is not None else 0
+
+                total_neurons_t += len(self.k_t_mean_ho[layer]) if self.k_t_mean_ho[layer] is not None else 0
+                selected_neurons_t += len(self.k_t_index_ho[layer]) if self.k_t_index_ho[layer] is not None else 0
+
+                total_neurons_t += len(self.v_t_mean_ho[layer]) if self.v_t_mean_ho[layer] is not None else 0
+                selected_neurons_t += len(self.v_t_index_ho[layer]) if self.v_t_index_ho[layer] is not None else 0
+
+                total_neurons_t += len(self.out_t_mean_ho[layer]) if self.out_t_mean_ho[layer] is not None else 0
+                selected_neurons_t += len(self.out_t_index_ho[layer]) if self.out_t_index_ho[layer] is not None else 0
+
+                total_neurons_t += len(self.up_t_mean_ho[layer]) if self.up_t_mean_ho[layer] is not None else 0
+                selected_neurons_t += len(self.up_t_index_ho[layer]) if self.up_t_index_ho[layer] is not None else 0
+
+                total_neurons_t += len(self.down_t_mean_ho[layer]) if self.down_t_mean_ho[layer] is not None else 0
+                selected_neurons_t += len(self.down_t_index_ho[layer]) if self.down_t_index_ho[layer] is not None else 0
+
+                # 空间层
+                total_neurons_s += len(self.q_s_mean_ho[layer]) if self.q_s_mean_ho[layer] is not None else 0
+                selected_neurons_s += len(self.q_s_index_ho[layer]) if self.q_s_index_ho[layer] is not None else 0
+
+                total_neurons_s += len(self.k_s_mean_ho[layer]) if self.k_s_mean_ho[layer] is not None else 0
+                selected_neurons_s += len(self.k_s_index_ho[layer]) if self.k_s_index_ho[layer] is not None else 0
+
+                total_neurons_s += len(self.v_s_mean_ho[layer]) if self.v_s_mean_ho[layer] is not None else 0
+                selected_neurons_s += len(self.v_s_index_ho[layer]) if self.v_s_index_ho[layer] is not None else 0
+
+                total_neurons_s += len(self.out_s_mean_ho[layer]) if self.out_s_mean_ho[layer] is not None else 0
+                selected_neurons_s += len(self.out_s_index_ho[layer]) if self.out_s_index_ho[layer] is not None else 0
+
+                total_neurons_s += len(self.up_s_mean_ho[layer]) if self.up_s_mean_ho[layer] is not None else 0
+                selected_neurons_s += len(self.up_s_index_ho[layer]) if self.up_s_index_ho[layer] is not None else 0
+
+                total_neurons_s += len(self.down_s_mean_ho[layer]) if self.down_s_mean_ho[layer] is not None else 0
+                selected_neurons_s += len(self.down_s_index_ho[layer]) if self.down_s_index_ho[layer] is not None else 0
+
+            total_neurons = total_neurons_t + total_neurons_s
+            selected_neurons = selected_neurons_t + selected_neurons_s
+            # 计算比例
+            proportion = selected_neurons / total_neurons if total_neurons != 0 else 0
+
+            # 打印结果
+            print(f"筛选出来的特殊神经元比例: {proportion * 100:.2f}% ({selected_neurons}/{total_neurons})")
+
+        elif current_type == 'general':
+            for layer in range(num_layers):
+                # 时间层
+                total_neurons_t += len(self.q_t_mean_ge[layer]) if self.q_t_mean_ge[layer] is not None else 0
+                selected_neurons_t += len(self.q_t_index_ge[layer]) if self.q_t_index_ge[layer] is not None else 0
+
+                total_neurons_t += len(self.k_t_mean_ge[layer]) if self.k_t_mean_ge[layer] is not None else 0
+                selected_neurons_t += len(self.k_t_index_ge[layer]) if self.k_t_index_ge[layer] is not None else 0
+
+                total_neurons_t += len(self.v_t_mean_ge[layer]) if self.v_t_mean_ge[layer] is not None else 0
+                selected_neurons_t += len(self.v_t_index_ge[layer]) if self.v_t_index_ge[layer] is not None else 0
+
+                total_neurons_t += len(self.out_t_mean_ge[layer]) if self.out_t_mean_ge[layer] is not None else 0
+                selected_neurons_t += len(self.out_t_index_ge[layer]) if self.out_t_index_ge[layer] is not None else 0
+
+                total_neurons_t += len(self.up_t_mean_ge[layer]) if self.up_t_mean_ge[layer] is not None else 0
+                selected_neurons_t += len(self.up_t_index_ge[layer]) if self.up_t_index_ge[layer] is not None else 0
+
+                total_neurons_t += len(self.down_t_mean_ge[layer]) if self.down_t_mean_ge[layer] is not None else 0
+                selected_neurons_t += len(self.down_t_index_ge[layer]) if self.down_t_index_ge[layer] is not None else 0
+
+                # 空间层
+                total_neurons_s += len(self.q_s_mean_ge[layer]) if self.q_s_mean_ge[layer] is not None else 0
+                selected_neurons_s += len(self.q_s_index_ge[layer]) if self.q_s_index_ge[layer] is not None else 0
+
+                total_neurons_s += len(self.k_s_mean_ge[layer]) if self.k_s_mean_ge[layer] is not None else 0
+                selected_neurons_s += len(self.k_s_index_ge[layer]) if self.k_s_index_ge[layer] is not None else 0
+
+                total_neurons_s += len(self.v_s_mean_ge[layer]) if self.v_s_mean_ge[layer] is not None else 0
+                selected_neurons_s += len(self.v_s_index_ge[layer]) if self.v_s_index_ge[layer] is not None else 0
+
+                total_neurons_s += len(self.out_s_mean_ge[layer]) if self.out_s_mean_ge[layer] is not None else 0
+                selected_neurons_s += len(self.out_s_index_ge[layer]) if self.out_s_index_ge[layer] is not None else 0
+
+                total_neurons_s += len(self.up_s_mean_ge[layer]) if self.up_s_mean_ge[layer] is not None else 0
+                selected_neurons_s += len(self.up_s_index_ge[layer]) if self.up_s_index_ge[layer] is not None else 0
+
+                total_neurons_s += len(self.down_s_mean_ge[layer]) if self.down_s_mean_ge[layer] is not None else 0
+                selected_neurons_s += len(self.down_s_index_ge[layer]) if self.down_s_index_ge[layer] is not None else 0
+
+            total_neurons = total_neurons_t + total_neurons_s
+            selected_neurons = selected_neurons_t + selected_neurons_s
+            # 计算比例
+            proportion = selected_neurons / total_neurons if total_neurons != 0 else 0
+
+            # 打印结果
+            print(f"筛选出来的常规神经元比例: {proportion * 100:.2f}% ({selected_neurons}/{total_neurons})")
+        
+
         return preds, trues, batch_x_marks
 
     def filter_neurons(self,mean_arr, cv_arr, mean_all):
@@ -677,6 +824,7 @@ class Exp(Exp_Basic):
         cv_thresh=self.args.cv_thresh
         mean_ratio=self.args.mean_ratio
         mask = (cv_arr < cv_thresh) & (mean_arr > mean_ratio * mean_all)
+        #mask = (np.abs(cv_arr) < cv_thresh) & (np.abs(mean_arr) > mean_ratio * np.abs(mean_all))
         return np.where(mask)[0].tolist()
 
     def compute_global_mean(self,activation_list_all, num_layers):
